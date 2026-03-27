@@ -175,7 +175,7 @@ function createSSEProcessor(res) {
       } else if (event === "content_block_stop") {
         writeSSE(res, raw, "filter");
 
-      } else if (event === "message_stop") {
+      } else if (event === "message_stop" || raw.trimEnd().endsWith("[DONE]")) {
         writeSSE(res, raw, "filter");
 
       } else {
@@ -187,7 +187,8 @@ function createSSEProcessor(res) {
   function finish() {
     if (buffer.length > 0) res.write(buffer);
     flushStopEvents(res, pendingIndexes);
-    writeSSE(res, `event: message_stop data: {"type":"message_stop"}\n\n`, "insert");
+    writeSSE(res, `event: message_stop\ndata: {"type":"message_stop"}\n\n`, "insert");
+    writeSSE(res, `event: data\ndata: [DONE]\n\n`, "insert");
     res.end();
   }
 
