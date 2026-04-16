@@ -48,7 +48,7 @@ The SSE repair logic specifically targets Claude Code's Anthropic-style event fo
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/openrouter-proxy.git
+git clone https://github.com/ahaostudy/openrouter-proxy.git
 cd openrouter-proxy
 node proxy.js
 ```
