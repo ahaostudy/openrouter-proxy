@@ -235,6 +235,12 @@ function proxyRequest(clientReq, clientRes) {
   const targetUrl = new URL(clientReq.url, `${tgtProto}//${hostname}`);
   if (port) targetUrl.port = port;
 
+  // Rewrite /v1/* → /api/v1/* so clients that omit the /api prefix (e.g. VS
+  // Code Claude Code extension) are forwarded to the correct OpenRouter endpoint.
+  if (targetUrl.pathname.startsWith("/v1/") || targetUrl.pathname === "/v1") {
+    targetUrl.pathname = "/api" + targetUrl.pathname;
+  }
+
   const headers = buildProxyHeaders(clientReq.headers);
   headers["host"] = hostname + (port ? `:${port}` : "");
   headers["x-forwarded-for"] = clientReq.socket.remoteAddress || "unknown";
