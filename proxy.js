@@ -230,6 +230,24 @@ function createSSELogger() {
 //  HTTP Proxy
 // ═══════════════════════════════════════════════════════════════
 
+/** Split user messages that mix tool_result blocks with text blocks.
+ *  When OpenRouter translates these to OpenAI format for providers like
+ *  DeepSeek, the tool response must land before the next user message or
+ *  the provider rejects the request ("insufficient tool messages following
+ *  tool_calls message"). */
+function splitMixedMessages(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== "user" || !Array.isArray(msg.content)) continue;
+    const toolBlocks = msg.content.filter(b => b.type === "tool_result");
+    const otherBlocks = msg.content.filter(b => b.type !== "tool_result");
+    if (toolBlocks.length > 0 && otherBlocks.length > 0) {
+      msg.content = toolBlocks;
+      messages.splice(i + 1, 0, { role: "user", content: otherBlocks });
+    }
+  }
+}
+
 function proxyRequest(clientReq, clientRes) {
   const { protocol: tgtProto, hostname, port } = CONFIG.target;
   const targetUrl = new URL(clientReq.url, `${tgtProto}//${hostname}`);
@@ -305,7 +323,24 @@ function proxyRequest(clientReq, clientRes) {
     });
   });
 
-  clientReq.pipe(proxyReq);
+  // Buffer the request body so we can split mixed-content user messages
+  // before forwarding (see splitMixedMessages comment above).
+  const chunks = [];
+  clientReq.on("data", (chunk) => chunks.push(chunk));
+  clientReq.on("end", () => {
+    const raw = Buffer.concat(chunks).toString();
+    let body = raw;
+    try {
+      const obj = JSON.parse(raw);
+      if (obj.messages) {
+        splitMixedMessages(obj.messages);
+        body = JSON.stringify(obj);
+      }
+    } catch { /* pass non-JSON bodies through unmodified */ }
+    proxyReq.setHeader("Content-Length", Buffer.byteLength(body));
+    proxyReq.write(body);
+    proxyReq.end();
+  });
 
   clientReq.on("error", (err) => {
     log("error", `Client request error: ${err.message}`);
