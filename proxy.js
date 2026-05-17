@@ -253,6 +253,10 @@ function proxyRequest(clientReq, clientRes) {
   const targetUrl = new URL(clientReq.url, `${tgtProto}//${hostname}`);
   if (port) targetUrl.port = port;
 
+  // Strip Anthropic-specific ?beta= query params; OpenRouter uses the
+  // "anthropic-beta" header instead and returns 404 for unknown params.
+  targetUrl.searchParams.delete("beta");
+
   // Rewrite /v1/* → /api/v1/* so clients that omit the /api prefix (e.g. VS
   // Code Claude Code extension) are forwarded to the correct OpenRouter endpoint.
   if (targetUrl.pathname.startsWith("/v1/") || targetUrl.pathname === "/v1") {
@@ -332,7 +336,9 @@ function proxyRequest(clientReq, clientRes) {
     let body = raw;
     try {
       const obj = JSON.parse(raw);
-      if (obj.messages) {
+      // Only split for DeepSeek models (OpenRouter translates to OpenAI
+      // format where tool results must precede the next user message).
+      if (obj.messages && /deepseek/i.test(obj.model)) {
         splitMixedMessages(obj.messages);
         body = JSON.stringify(obj);
       }
